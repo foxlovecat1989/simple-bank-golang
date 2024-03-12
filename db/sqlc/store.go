@@ -95,19 +95,8 @@ func (store *Store) TransferTx(ctx context.Context, arg TransferTxParams) (Trans
 			return err
 		}
 
-		// TODO: update accounts' balance
-		result.FromAccount, err = queries.AddAccountBalance(ctx, AddAccountBalanceParams{
-			Amount: -arg.Amount,
-			ID:     arg.FromAccountID,
-		})
-		if err != nil {
-			return err
-		}
-
-		result.ToAccount, err = queries.AddAccountBalance(ctx, AddAccountBalanceParams{
-			Amount: arg.Amount,
-			ID:     arg.ToAccountID,
-		})
+		// update accounts' balance
+		result.FromAccount, result.ToAccount, err = transfer(queries, ctx, arg.FromAccountID, arg.ToAccountID, arg.Amount)
 		if err != nil {
 			return err
 		}
@@ -116,4 +105,39 @@ func (store *Store) TransferTx(ctx context.Context, arg TransferTxParams) (Trans
 	})
 
 	return result, err
+}
+
+func transfer(
+	queries *Queries,
+	ctx context.Context,
+	fromAccountID int64,
+	toAccountID int64,
+	amount int64,
+) (fromAccount Account, toAccount Account, err error) {
+	// swap order
+	if fromAccountID > toAccountID {
+		fromAccountID, toAccountID = toAccountID, fromAccountID
+		amount = -amount
+	}
+	fromAccount, err = queries.AddAccountBalance(ctx, AddAccountBalanceParams{
+		Amount: -amount,
+		ID:     fromAccountID,
+	})
+	if err != nil {
+		return
+	}
+	toAccount, err = queries.AddAccountBalance(ctx, AddAccountBalanceParams{
+		Amount: amount,
+		ID:     toAccountID,
+	})
+	if err != nil {
+		return
+	}
+
+	// swap back
+	if fromAccountID > toAccountID {
+		fromAccount, toAccount = toAccount, fromAccount
+	}
+
+	return fromAccount, toAccount, err
 }
